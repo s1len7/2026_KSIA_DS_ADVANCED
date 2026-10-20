@@ -1,0 +1,23 @@
+[project]
+name = "ksia-ds-advanced"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.4",
+    "pandas>=3.0.6",
+    "plotly>=7.1.0",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "streamlit>=1.66.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "matplotlib>=3.11.2",
+    "nbconvert>=7.17.2",
+    "openpyxl>=3.1.5",
+    "seaborn>=0.13.2",
+    "statsmodels>=0.15.0",
+    "xgboost>=3.4.1",
+]

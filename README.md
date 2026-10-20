@@ -4,8 +4,8 @@
 |---|---|
 | 과정명 | 반도체 Data Science 재직자 역량 강화 심화과정 2차 |
 | 사이트 | https://academy.ksia.or.kr/lecture/offline/detail/747 |
-| 교육기간 | 2026-10-20 (화) ~ 2026-10-22 (목), 총 21시간 |
 | 교육장소 | 반도체 아카데미 경기도 교육센터 |
+<!-- | 교육기간 | 2026-10-20 (화) ~ 2026-10-22 (목), 총 21시간 | -->
 
 반도체아카데미 재직자 DS 역량강화교육(심화과정)용 데이터 분석 작업 공간입니다.
 공정 데이터(산화·포토·식각·이온주입·열처리, Furnace, Die Casting)를 탐색하고 불량 요인을 분석합니다.
@@ -40,7 +40,12 @@
 │   └── gpt_file/                          # 교육 자료 (안내문, 계획서, 발표자료, 예제 이미지)
 ├── backup/                                # 교육 원본 데이터셋 zip & 기존 실습 노트북 (01_Furnance, 02_CVD)
 ├── output/                                # 초기 분석 차트 (analysis/output/analysis_summary.png 와 동일)
-├── .venv/                                 # Python 가상환경
+├── .streamlit/config.toml                 # 테마 설정 (루트 실행·Streamlit Cloud 용)
+├── pyproject.toml                         # 의존성 목록 (uv)
+├── uv.lock                                # 설치 버전 고정 (uv 가 관리, 직접 수정하지 않음)
+├── .python-version                        # Python 3.13
+├── requirements.txt                       # uv.lock 에서 내보낸 앱 의존성 (Streamlit Cloud 용)
+├── .venv/                                 # Python 가상환경 (uv 가 생성, git 제외)
 └── python-manager-26.4.msix               # Python 설치 관리자
 ```
 
@@ -58,18 +63,32 @@
 
 ## 환경 설정
 
-Python 3.15 가상환경(`.venv`)에 분석 패키지가 설치되어 있습니다.
+[uv](https://docs.astral.sh/uv/) 로 Python 3.13 가상환경(`.venv`)과 패키지를 관리합니다.
+의존성은 `pyproject.toml` 에 있고, 설치되는 정확한 버전은 `uv.lock` 에 고정되어 있습니다.
+
+- 앱 실행용: streamlit, pandas, numpy, plotly, scipy, scikit-learn
+- 노트북용(dev 그룹): ipykernel, nbconvert, matplotlib, seaborn, statsmodels, xgboost, openpyxl
 
 ```powershell
-# 가상환경 활성화
-.\.venv\Scripts\Activate.ps1
+# uv 설치 (한 번만)
+winget install astral-sh.uv
 
-# 새로 구성할 경우
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install pandas numpy scipy matplotlib seaborn scikit-learn nbformat nbconvert ipykernel streamlit plotly
+# 환경 구성: Python 3.13 이 없으면 자동으로 받고, .venv 를 만들어 uv.lock 대로 설치
+uv sync
+
+# 패키지 추가 / 제거
+uv add <패키지>            # 앱에 필요한 패키지
+uv add --dev <패키지>      # 노트북에서만 쓰는 패키지
+uv remove <패키지>
+
+# 앱 의존성을 바꾼 뒤에는 Streamlit Cloud 용 requirements.txt 도 다시 생성
+uv export --no-dev --no-hashes --no-emit-project -o requirements.txt
 ```
 
-VS Code에서 노트북을 열 때는 커널로 **`.venv` (Python 3.15)** 를 선택하세요.
+`uv run <명령>` 으로 실행하면 가상환경을 활성화하지 않아도 `.venv` 안에서 실행됩니다.
+직접 활성화하려면 `.\.venv\Scripts\Activate.ps1`.
+
+VS Code에서 노트북을 열 때는 커널로 **`.venv` (Python 3.13)** 를 선택하세요.
 노트북은 `../data/` 상대경로로 데이터를 읽으므로 `analysis/` 폴더 위치를 유지해야 합니다.
 
 ## 분석 노트북 (Jupyter)
@@ -87,7 +106,7 @@ VS Code에서 노트북을 열 때는 커널로 **`.venv` (Python 3.15)** 를 �
 ```powershell
 cd analysis
 foreach ($nb in Get-ChildItem *.ipynb) {
-    ..\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace $nb.Name --ExecutePreprocessor.timeout=1800
+    uv run jupyter nbconvert --to notebook --execute --inplace $nb.Name --ExecutePreprocessor.timeout=1800
 }
 ```
 
@@ -186,13 +205,13 @@ foreach ($nb in Get-ChildItem *.ipynb) {
 ### 실행
 
 ```powershell
-cd C:\1020_DS\app
-..\.venv\Scripts\streamlit run app.py
+cd C:\2026_KSIA_DS_ADVANCED
+uv run streamlit run app/app.py
 ```
 
 - 터미널에 `Local URL: http://localhost:8501` 이 뜨면 브라우저에서 접속합니다.
-- **반드시 `app` 폴더에서 실행**하세요. 다른 폴더에서 실행하면 테마 설정(`.streamlit/config.toml`)이 적용되지 않습니다.
-- 다른 포트로 실행: `..\.venv\Scripts\streamlit run app.py --server.port 8502`
+- **프로젝트 루트에서 실행**하세요. 테마 설정(`.streamlit/config.toml`)은 실행한 폴더에서 읽습니다. `app` 폴더에서 `uv run streamlit run app.py` 로 실행해도 됩니다(`app/.streamlit/` 사용).
+- 다른 포트로 실행: `uv run streamlit run app/app.py --server.port 8502`
 - 같은 네트워크의 다른 PC에서 보려면 터미널에 표시되는 `Network URL` 로 접속합니다 (Windows 방화벽 허용 필요).
 
 ### 종료
@@ -261,6 +280,6 @@ cd C:\1020_DS\app
 | 오른쪽 위에 `Running...` 이 계속 표시됨 | 계산 중입니다. 끝날 때까지 기다리거나 `⋮` → `Rerun`. |
 | CSV 를 바꿨는데 화면이 그대로임 | `⋮` → `Clear cache` 후 `Rerun` (키보드 `C` → `R`). |
 | `Port 8501 is already in use` | 이미 서버가 실행 중입니다. 기존 터미널에서 `Ctrl + C` 로 끄거나 `--server.port 8502` 로 실행. |
-| `streamlit` 명령을 찾을 수 없음 | 가상환경 경로로 실행하세요: `..\.venv\Scripts\streamlit run app.py` |
+| `streamlit` 명령을 찾을 수 없음 | 앞에 `uv run` 을 붙여 실행하세요: `uv run streamlit run app/app.py`. `uv` 도 없다고 나오면 터미널을 새로 열거나 uv 를 설치하세요. |
 | `ModuleNotFoundError: common` | `views/` 안의 파일을 직접 실행한 경우입니다. 항상 `app.py` 로 실행하세요. |
 | 노트북과 수치가 조금 다름 | 일부 페이지는 속도를 위해 트리 개수를 줄였습니다. 소수점 셋째 자리 수준의 차이입니다. |

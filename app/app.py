@@ -1,6 +1,5 @@
-"""실행 (테마 설정 .streamlit/config.toml 을 읽도록 app 폴더에서):
-    cd app
-    ..\\.venv\\Scripts\\streamlit run app.py
+"""실행 (테마 설정 .streamlit/config.toml 을 읽도록 프로젝트 루트에서):
+    uv run streamlit run app/app.py
 """
 import streamlit as st
 
