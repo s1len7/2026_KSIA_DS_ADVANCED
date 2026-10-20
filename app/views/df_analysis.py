@@ -14,7 +14,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier, export_text
 
-from common import (BLUE, GRAY, INK, MUTED, ORANGE, RED, caveat, load_csv, page_header, show,
+from common import (BLUE, GRAY, INK, MUTED, ORANGE, RED, caveat, fmt_table, load_csv, page_header, show,
                     show_describe, style_fig)
 
 DROP = ['Target', 'Defect', 'Flux840s', 'Temp_Oxid', 'Vapor', 'Wavelength', '두께정상', 'CD정상']
@@ -65,7 +65,7 @@ def importance(_X, y):
 @st.cache_data
 def tree_rules(_X, yd, depth):
     t = DecisionTreeClassifier(max_depth=depth, min_samples_leaf=20, random_state=0).fit(_X, yd)
-    return export_text(t, feature_names=list(_X.columns), show_weights=True)
+    return export_text(t, feature_names=list(_X.columns), show_weights=True, decimals=4)
 
 
 df, X = get_data()
@@ -78,16 +78,16 @@ reg_df, clf_df = model_scores(X, y, yd)
 k = st.columns(5)
 k[0].metric('웨이퍼 수', f'{len(df):,}')
 k[1].metric('불량률 (Defect)', f'{yd.mean():.1%}', f'{yd.sum()}개', delta_color='off')
-k[2].metric('Target 평균', f'{y.mean():.1f}', f'중앙값 {y.median():.0f}', delta_color='off')
-k[3].metric('Target 회귀 R²', f'{reg_df["R²"].max():.3f}', 'HistGB · 5-fold', delta_color='off')
-k[4].metric('Defect 분류 AUC', f'{clf_df["ROC-AUC"].max():.3f}', 'RandomForest', delta_color='off')
+k[2].metric('Target 평균', f'{y.mean():,.4f}', f'중앙값 {y.median():,.4f}', delta_color='off')
+k[3].metric('Target 회귀 R²', f'{reg_df["R²"].max():,.4f}', 'HistGB · 5-fold', delta_color='off')
+k[4].metric('Defect 분류 AUC', f'{clf_df["ROC-AUC"].max():,.4f}', 'RandomForest', delta_color='off')
 
 tabs = st.tabs(['데이터 개요', '라벨 구조', '영향 인자', '모델 성능', '규칙·고위험 조건'])
 
 # ── 데이터 개요 ──────────────────────────────────────────
 with tabs[0]:
     st.markdown(f'**{len(df):,}행 × {df.shape[1]}열**, 결측치 {df.isna().sum().sum()}개, 중복 행 {df.duplicated().sum()}개')
-    st.dataframe(df.head(20), width='stretch', height=280)
+    st.dataframe(fmt_table(df.head(20)), width='stretch', height=280)
     st.markdown('##### 기술통계')
     show_describe(df.select_dtypes('number'))
     c1, c2 = st.columns(2)
@@ -139,7 +139,7 @@ with tabs[2]:
         top = imp.head(12)[::-1]
         fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h',
                                marker_color=[BLUE if v > 0.05 else GRAY for v in top.values],
-                               text=[f'{v:.3f}' for v in top.values], textposition='outside'))
+                               text=[f'{v:,.4f}' for v in top.values], textposition='outside'))
         fig.update_layout(title='Target 예측 변수 중요도 (Permutation ΔR²)')
         show(style_fig(fig, 460, legend=False))
     with c2:
@@ -152,7 +152,7 @@ with tabs[2]:
         fig = go.Figure(go.Bar(x=g.index, y=g['불량률'], marker_color=BLUE,
                                text=g['불량률'].map(lambda v: f'{v:.1%}'), textposition='outside',
                                customdata=g[['Target평균', 'n']],
-                               hovertemplate='%{x}<br>불량률 %{y:.1%}<br>Target 평균 %{customdata[0]:.1f}<br>n=%{customdata[1]}<extra></extra>'))
+                               hovertemplate='%{x}<br>불량률 %{y:.1%}<br>Target 평균 %{customdata[0]:,.4f}<br>n=%{customdata[1]}<extra></extra>'))
         fig.add_hline(y=yd.mean(), line_dash='dot', line_color=INK, annotation_text=f'전체 {yd.mean():.1%}')
         fig.update_layout(title=f'{var} 구간별 불량률', yaxis_tickformat='.0%')
         show(style_fig(fig, 400, legend=False))
@@ -162,13 +162,13 @@ with tabs[3]:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('##### Target 회귀 (5-fold CV)')
-        st.dataframe(reg_df.style.format({'R²': '{:.3f}', 'R² 표준편차': '{:.3f}', 'MAE': '{:.1f}'}),
+        st.dataframe(fmt_table(reg_df, {'R²': '{:,.4f}', 'R² 표준편차': '{:,.4f}', 'MAE': '{:,.4f}'}),
                      hide_index=True, width='stretch')
     with c2:
         st.markdown('##### Defect 분류 (Target 제외, 5-fold CV)')
-        st.dataframe(clf_df.style.format({'ROC-AUC': '{:.3f}', 'PR-AUC': '{:.3f}'}),
+        st.dataframe(fmt_table(clf_df, {'ROC-AUC': '{:,.4f}', 'PR-AUC': '{:,.4f}'}),
                      hide_index=True, width='stretch')
-        st.caption(f'PR-AUC 기준선(불량률) = {yd.mean():.3f}')
+        st.caption(f'PR-AUC 기준선(불량률) = {yd.mean():,.4f}')
     caveat('트리 모델이 선형 모델보다 크게 좋다는 것은 변수 효과가 직선이 아니라 임계값 형태라는 뜻입니다.')
 
 # ── 규칙·고위험 조건 ─────────────────────────────────────

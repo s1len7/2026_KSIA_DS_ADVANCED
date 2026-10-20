@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import (BLUE, GRAY, INK, ORANGE, RED, caveat, load_csv, page_header, show, show_describe,
+from common import (BLUE, GRAY, INK, ORANGE, RED, caveat, fmt_table, load_csv, page_header, show, show_describe,
                     style_fig)
 
 NUM = ['Z1_Temp', 'Z1_OP1', 'ST',
@@ -135,7 +135,7 @@ with tabs[0]:
     c[3].metric('정상여부 = (이상치개수 ≥ 3)', '일치' if chk['label_match'] else '불일치')
 
     st.markdown('**결측치 대체** — 7개 컬럼 343셀을 컬럼 전체 평균으로 채움')
-    st.dataframe(chk['impute'].style.format({'대체값': '{:,.4f}', '원본 전체 평균': '{:,.4f}'}), width='stretch',
+    st.dataframe(fmt_table(chk['impute'], {'대체값': '{:,.4f}', '원본 전체 평균': '{:,.4f}'}), width='stretch',
                  hide_index=True)
     st.markdown(f"- `요일` = Datetime 의 요일명: **{'일치' if chk['weekday_same'] else '불일치'}** (일요일 데이터 없음)")
     caveat('평균 대체는 시계열 흐름을 무시합니다. 특히 `Tube_Furnace1_OP` 결측 254개는 run 2·10 에 블록으로 몰려 있어 '
@@ -169,7 +169,7 @@ with tabs[1]:
     st.caption(f'k = {kk:g}, 기준 ≥ {thr} · 원본 라벨은 k = 1.5, 기준 ≥ 3')
 
     st.markdown('**센서별 IQR 경계와 이탈 비율**')
-    st.dataframe(fences.style.format({'하한': '{:,.3f}', '상한': '{:,.3f}', '하한 이탈(%)': '{:.2f}', '상한 이탈(%)': '{:.2f}'}),
+    st.dataframe(fmt_table(fences, {'하한': '{:,.4f}', '상한': '{:,.4f}', '하한 이탈(%)': '{:.2f}', '상한 이탈(%)': '{:.2f}'}),
                  width='stretch')
 
 # 3. 이상 요인 -----------------------------------------------------------------------
@@ -250,19 +250,19 @@ with tabs[4]:
         st.session_state['furnace_model_ready'] = True
         res = fit_model()
         c = st.columns(3)
-        c[0].metric('ROC-AUC', f"{res['auc']:.4f}")
-        c[1].metric('PR-AUC', f"{res['ap']:.4f}", help=f"기준선(이상 비율) {res['base']:.4f}")
+        c[0].metric('ROC-AUC', f"{res['auc']:,.4f}")
+        c[1].metric('PR-AUC', f"{res['ap']:,.4f}", help=f"기준선(이상 비율) {res['base']:,.4f}")
         c[2].metric('모델', 'HistGB · 200 iter')
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('**검증 Run 별 ROC-AUC**')
-            st.dataframe(res['per_run'].style.format({'ROC-AUC': '{:.3f}', '이상 행': '{:,}'}, na_rep='- (이상 0건)'),
+            st.dataframe(res['per_run'].style.format({'ROC-AUC': '{:,.4f}', '이상 행': '{:,}'}, na_rep='- (이상 0건)'),
                          width='stretch')
         with c2:
             imp = res['importance']
             fig = go.Figure(go.Bar(x=imp.values, y=[short(i) for i in imp.index], orientation='h',
                                    marker_color=[BLUE if v > 0.01 else GRAY for v in imp.values],
-                                   text=[f'{v:.3f}' for v in imp.values], textposition='outside'))
+                                   text=[f'{v:,.4f}' for v in imp.values], textposition='outside'))
             fig.update_layout(title='Permutation importance (검증 run 7, PR-AUC 감소)', xaxis_title='PR-AUC 감소량')
             show(style_fig(fig, height=420, legend=False))
         caveat('규칙 기반 라벨이라 높은 AUC 는 당연한 결과입니다. 이상이 가장 많은 GroupG(run 7)는 AUC 0.926 으로 가장 낮아, '

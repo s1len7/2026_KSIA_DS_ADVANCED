@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy import stats
 
-from common import (BLUE, GRAY, INK, MUTED, ORANGE, RED, caveat, load_csv, page_header, show,
+from common import (BLUE, GRAY, INK, MUTED, ORANGE, RED, caveat, fmt_table, load_csv, page_header, show,
                     show_describe, style_fig)
 
 SOURCE = 'DieCasting_analysis.csv'
@@ -110,7 +110,7 @@ def tree_text(df: pd.DataFrame, product: int) -> str:
     s = df[df.Product_Type == product]
     proc = [c for c in num_cols(df) if not c.startswith('Factory')]
     t = DecisionTreeClassifier(max_depth=3, min_samples_leaf=50, random_state=0).fit(s[proc], s.Defect)
-    return export_text(t, feature_names=proc, show_weights=True)
+    return export_text(t, feature_names=proc, show_weights=True, decimals=4)
 
 
 def rate_n(s: pd.DataFrame) -> tuple[float, int]:
@@ -150,14 +150,14 @@ with tabs[0]:
     c1.metric('완전 중복 행', f'{q["dup_rows"]:,}')
     c2.metric('고유 공정값 조합', f'{q["unique_x"]:,}')
     c3.metric('같은 공정값·다른 라벨', f'{q["conflict_groups"]}조합', f'{q["conflict_rows"]}행', delta_color='off')
-    c4.metric('불량 자기상관 (lag 1)', f'{q["autocorr"]:.3f}')
+    c4.metric('불량 자기상관 (lag 1)', f'{q["autocorr"]:,.4f}')
     st.markdown(
         f'- **상수 컬럼**: `{", ".join(q["const"])}` → 제거\n'
         f'- **센서 0값 행 {len(q["zero_rows"])}개** (`{"`, `".join(SENSOR)}` 중 하나가 0) → 측정 이상으로 제거\n'
         f'- 공정값이 여러 쇼트 동안 그대로 기록되고, 불량도 연속해서 발생 → 무작위로 섞는 검증은 성능을 부풀림'
     )
     with st.expander(f'센서 0값 행 {len(q["zero_rows"])}개 보기'):
-        st.dataframe(q['zero_rows'], width='stretch')
+        st.dataframe(fmt_table(q['zero_rows']), width='stretch')
     caveat('행 순서를 **쇼트 생산 순서**로 가정했습니다. 데이터에 시간 컬럼이 없으므로 '
            '기간·시간 블록 분석은 이 가정에 의존합니다.')
 
@@ -173,7 +173,7 @@ with tabs[1]:
             hovertemplate='%{x}<br>불량률 %{y:.1f}%<extra></extra>'))
         fig.update_yaxes(title='불량률 (%)', range=[0, by['mean'].max() * 140])
         show(style_fig(fig, legend=False).update_layout(title='제품별 불량률'))
-        st.caption(f'카이제곱 검정 p-value = {pval:.2e}')
+        st.caption(f'카이제곱 검정 p-value = {pval:,.4f}')
     with right:
         var = st.selectbox('공정 변수', num_cols(df), index=num_cols(df).index('Casting_Pressure'), key='dc_prod_var')
         fig = go.Figure()
@@ -183,7 +183,7 @@ with tabs[1]:
     st.markdown('**제품별 공정값 중앙값** — 두 제품은 주조압력·형체력·용탕온도 등 공정 조건 자체가 다르므로 이후 분석은 제품별로 봅니다.')
     med = df.groupby('Product_Type')[num_cols(df)].median().T
     med.columns = [f'Product {c}' for c in med.columns]
-    st.dataframe(med.style.format('{:,.3f}'), width='stretch')
+    st.dataframe(med.style.format('{:,.4f}'), width='stretch')
 
 # ── 3. 기간(시간) 효과 ──
 with tabs[2]:
@@ -217,7 +217,7 @@ with tabs[2]:
     with r:
         st.markdown('**기간별 불량률 & 공정값 평균**')
         st.dataframe(tbl.rename(columns={'Defect': '불량률'}).style.format({'불량률': '{:.1%}', 'n': '{:,.0f}'} |
-                     {v: '{:,.3f}' for v in vars_}), width='stretch')
+                     {v: '{:,.4f}' for v in vars_}), width='stretch')
     caveat('**기간 교란** — Product 1 불량률은 기간마다 크게 줄고(Q1→Q4), 같은 시기에 습도·냉각수 압력 등도 함께 바뀝니다. '
            '전체 데이터에서 보이는 변수-불량 상관 중 상당수는 공정 변수가 아니라 시기(로트·설비 상태) 효과일 수 있습니다.')
 
@@ -231,17 +231,17 @@ with tabs[3]:
         for cname, color in [('랜덤 5-fold', GRAY), ('시간 블록 5-fold', BLUE)]:
             sub = res[res.CV == cname]
             fig.add_trace(go.Bar(x=sub['모델'], y=sub['ROC-AUC'], name=cname, marker_color=color,
-                                 text=[f'{v:.3f}' for v in sub['ROC-AUC']], textposition='outside'))
+                                 text=[f'{v:,.4f}' for v in sub['ROC-AUC']], textposition='outside'))
         fig.add_hline(y=0.5, line_dash='dot', line_color=INK, annotation_text='무작위 예측 0.5', annotation_position='bottom left')
         fig.update_yaxes(title='ROC-AUC', range=[0.4, 1.0]); fig.update_layout(barmode='group')
         show(style_fig(fig).update_layout(title='랜덤 CV vs 시간 블록 CV (ROC-AUC)'))
     with r:
-        pv = res.pivot(index='모델', columns='CV', values=['ROC-AUC', 'PR-AUC']).round(3)
+        pv = res.pivot(index='모델', columns='CV', values=['ROC-AUC', 'PR-AUC'])
         pv.columns = [f'{m} · {c}' for m, c in pv.columns]
-        st.dataframe(pv, width='stretch')
-        st.caption(f'PR-AUC 기준선(불량률) = {df.Defect.mean():.3f}')
+        st.dataframe(fmt_table(pv), width='stretch')
+        st.caption(f'PR-AUC 기준선(불량률) = {df.Defect.mean():,.4f}')
         auc_ho, n_ho, imp = time_holdout(df)
-        st.metric('시간 순 hold-out ROC-AUC (RandomForest)', f'{auc_ho:.3f}',
+        st.metric('시간 순 hold-out ROC-AUC (RandomForest)', f'{auc_ho:,.4f}',
                   f'앞 75% 학습 → 뒤 {n_ho:,} 쇼트 평가', delta_color='off')
     caveat('**랜덤 CV 과대평가** — 랜덤 CV 는 거의 같은 인접 쇼트가 train/test 에 섞여 트리 모델이 이를 외웁니다. '
            '시간 블록 CV 와 hold-out 성능이 실제 미래 구간 예측력에 가깝고, 공정 변수만으로는 예측력이 약합니다.')
@@ -254,13 +254,13 @@ with tabs[4]:
     l, r = st.columns([1, 1])
     with l:
         st.markdown(f'**Product {prod} 정상 vs 불량 (Mann-Whitney U)**')
-        st.dataframe(mw.style.format({'평균_정상': '{:,.4f}', '평균_불량': '{:,.4f}', 'Spearman': '{:+.3f}', 'p_value': '{:.2e}'}),
+        st.dataframe(fmt_table(mw, {'평균_정상': '{:,.4f}', '평균_불량': '{:,.4f}', 'Spearman': '{:+,.4f}', 'p_value': '{:,.4f}'}),
                      width='stretch', height=420)
     with r:
         top = mw.head(10).iloc[::-1]
         fig = go.Figure(go.Bar(x=top.Spearman, y=top['변수'], orientation='h',
                                marker_color=[RED if v > 0 else BLUE for v in top.Spearman],
-                               text=[f'{v:+.3f}' for v in top.Spearman], textposition='outside'))
+                               text=[f'{v:+,.4f}' for v in top.Spearman], textposition='outside'))
         fig.update_xaxes(title='Spearman 상관 (불량과)')
         show(style_fig(fig, height=420, legend=False).update_layout(title='p-value 상위 10개 변수의 상관 방향'))
 
@@ -269,7 +269,7 @@ with tabs[4]:
     top_imp = imp.head(8).iloc[::-1]
     fig = go.Figure(go.Bar(x=top_imp.values, y=top_imp.index, orientation='h',
                            marker_color=[BLUE if v > 0.005 else GRAY for v in top_imp.values],
-                           text=[f'{v:.4f}' for v in top_imp.values], textposition='outside'))
+                           text=[f'{v:,.4f}' for v in top_imp.values], textposition='outside'))
     fig.update_xaxes(title='ΔROC-AUC')
     show(style_fig(fig, height=320, legend=False))
 

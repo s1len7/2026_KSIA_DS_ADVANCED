@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from common import (BLUE, GRAY, INK, MUTED, ORANGE, RED, SERIES, caveat, load_csv, page_header, show,
+from common import (BLUE, GRAY, INK, MUTED, ORANGE, RED, SERIES, caveat, fmt_table, load_csv, page_header, show,
                     show_describe, style_fig)
 
 NUM = ['Z1_Temp', 'Z1_OP1', 'ST',
@@ -36,7 +36,7 @@ def run_table() -> pd.DataFrame:
                               rows=('dt', 'size'))
     t['na_rows'] = df[NUM].isna().any(axis=1).groupby(df['run']).sum()
     t['minutes'] = ((t['end'] - t['start']).dt.total_seconds() / 60 + 1).astype(int)
-    t['gap_before_h'] = ((t['start'] - t['end'].shift()).dt.total_seconds() / 3600).round(1)
+    t['gap_before_h'] = ((t['start'] - t['end'].shift()).dt.total_seconds() / 3600)
     return t
 
 
@@ -91,7 +91,7 @@ k = st.columns(5)
 k[0].metric('행 수', f'{len(df):,}')
 k[1].metric('기간', f"{df['dt'].min():%m-%d} ~ {df['dt'].max():%m-%d}", help=f"{df['dt'].min()} ~ {df['dt'].max()}")
 k[2].metric('Run(가동 구간)', f'{len(runs)}개', help='Code_Num 이 바뀌는 지점 = 3.8시간~2일 공백')
-k[3].metric('분당 행 수(중앙값)', f"{df.groupby('dt').size().median():.0f}", help='타임스탬프는 분 단위 — 약 1초 샘플링으로 추정')
+k[3].metric('분당 행 수(중앙값)', f"{df.groupby('dt').size().median():,.4f}", help='타임스탬프는 분 단위 — 약 1초 샘플링으로 추정')
 k[4].metric('결측 셀', f"{int(df[NUM].isna().sum().sum()):,}")
 
 tabs = st.tabs(['데이터 개요', 'Run 구조', '시계열 탐색', '신호 특성', '이벤트·이상'])
@@ -136,8 +136,8 @@ with tabs[1]:
     tbl = runs.copy()
     tbl['start'] = tbl['start'].dt.strftime('%m-%d %H:%M')
     tbl['end'] = tbl['end'].dt.strftime('%m-%d %H:%M')
-    st.dataframe(tbl.rename(columns={'rows': '행 수', 'na_rows': '결측 포함 행', 'minutes': '지속(분)',
-                                     'gap_before_h': '직전 Run 과 공백(시간)'}),
+    st.dataframe(fmt_table(tbl.rename(columns={'rows': '행 수', 'na_rows': '결측 포함 행', 'minutes': '지속(분)',
+                                     'gap_before_h': '직전 Run 과 공백(시간)'})),
                  width='stretch')
 
     st.subheader('Code_Num × Process_Type')
@@ -185,7 +185,7 @@ with tabs[3]:
     s = stats['행 단위 lag-1 자기상관'].sort_values()
     fig = go.Figure(go.Bar(x=s.values, y=[short(c) for c in s.index], orientation='h',
                            marker_color=[GRAY if v < 0.1 else BLUE for v in s.values],
-                           text=[f'{v:.2f}' for v in s.values], textposition='outside'))
+                           text=[f'{v:,.4f}' for v in s.values], textposition='outside'))
     fig.update_layout(xaxis_title='lag-1 자기상관 (행 단위)', xaxis_range=[0, 1.12])
     show(style_fig(fig, height=420, legend=False))
     st.dataframe(stats.style.format('{:,.4f}'), width='stretch')
@@ -196,14 +196,14 @@ with tabs[3]:
     z = zone_ranges()
     mid = (z['bins'][:-1] + z['bins'][1:]) / 2
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=mid, y=z['row_hist'], name=f"행 단위 (평균 {z['row_mean']:.1f}℃)", marker_color=GRAY))
-    fig.add_trace(go.Bar(x=mid, y=z['min_hist'], name=f"분 평균 (평균 {z['min_mean']:.1f}℃)", marker_color=BLUE))
+    fig.add_trace(go.Bar(x=mid, y=z['row_hist'], name=f"행 단위 (평균 {z['row_mean']:,.4f}℃)", marker_color=GRAY))
+    fig.add_trace(go.Bar(x=mid, y=z['min_hist'], name=f"분 평균 (평균 {z['min_mean']:,.4f}℃)", marker_color=BLUE))
     fig.update_layout(barmode='overlay', xaxis_title='4개 구역 온도 편차 max-min (℃)', yaxis_title='비율 (%)')
     fig.update_traces(opacity=0.85)
     show(style_fig(fig, height=360))
     c1, c2 = st.columns([1, 2])
-    c1.dataframe(z['zone_mean'].rename('평균 온도(℃)').round(2), width='stretch')
-    c2.dataframe(z['run_zone'].round(2), width='stretch')
+    c1.dataframe(fmt_table(z['zone_mean'].rename('평균 온도(℃)')), width='stretch')
+    c2.dataframe(fmt_table(z['run_zone']), width='stretch')
 
 # 5. 이벤트·이상 ---------------------------------------------------------------------
 with tabs[4]:
@@ -211,11 +211,11 @@ with tabs[4]:
     cp = mm[mm['run'] == 7].set_index('dt')['Tube_Furnace_CP']
     med = float(df['Tube_Furnace_CP'].median())
     fig = go.Figure(go.Scatter(x=cp.index, y=cp.values, mode='lines', line=dict(color=RED, width=2), name='CP 분 평균'))
-    fig.add_hline(y=med, line=dict(color=INK, dash='dot', width=1), annotation_text=f'전체 중앙값 {med:.3f}',
+    fig.add_hline(y=med, line=dict(color=INK, dash='dot', width=1), annotation_text=f'전체 중앙값 {med:,.4f}',
                   annotation_position='top left')
     fig.update_layout(yaxis_title='Tube_Furnace_CP', yaxis_range=[0, 0.55])
     show(style_fig(fig, height=360, legend=False))
-    st.markdown(f"- 07시 전까지 약 {cp.iloc[:120].mean():.3f} → 종료 직전 **{cp.iloc[-10:].mean():.3f}**")
+    st.markdown(f"- 07시 전까지 약 {cp.iloc[:120].mean():,.4f} → 종료 직전 **{cp.iloc[-10:].mean():,.4f}**")
 
     st.subheader('Tube_Furnace1_OP 저출력 구간')
     thr = st.slider('저출력 기준 (OP1 <)', 5.0, 60.0, 40.0, 1.0)
